@@ -62,7 +62,7 @@ namespace Savey
             }
             catch (JsonReaderException ex)
             {
-                string errorMessage = string.Format("Could not parse JSON inside request body: Path '{0}', line {1}, {2}",
+                string errorMessage = string.Format("Could not parse JSON from request body: Path '{0}', line {1}, position {2}.",
                     ex.Path,
                     ex.LineNumber,
                     ex.LinePosition);
