@@ -26,7 +26,7 @@ namespace Savey
         /// </summary>
         [FunctionName("GetSavingsFile")]
         public async Task<IActionResult> RunGet(
-            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "SavingsFile")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "SavingsFile")] HttpRequest req,
             ILogger log)
         {
             string id = Utilities.GetUserIdFromRequest(req);
@@ -45,7 +45,7 @@ namespace Savey
         /// </summary>
         [FunctionName("PostSavingsFile")]
         public async Task<IActionResult> RunPost(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "SavingsFile")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "SavingsFile")] HttpRequest req,
             ILogger log)
         {
             string id = Utilities.GetUserIdFromRequest(req);
