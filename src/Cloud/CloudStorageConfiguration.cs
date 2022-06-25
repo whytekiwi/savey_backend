@@ -6,9 +6,9 @@ namespace Savey
     public class CloudStorageConfiguration
     {
         /// <summary>
-        /// The connection string for the blob storage account
+        /// The connection string for the blob storage container
         /// </summary>
-        public string? ConnectionString { get; set; }
+        public string? ContainerConnectionString { get; set; }
 
         /// <summary>
         /// The container name for the blob storage container

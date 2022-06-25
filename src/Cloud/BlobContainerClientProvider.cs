@@ -28,7 +28,7 @@ namespace Savey
         /// <exception cref="Exception">If the application configuration was missing key values</exception>
         public BlobContainerClientProvider(IOptions<CloudStorageConfiguration> options)
         {
-            string? connectionString = options?.Value?.ConnectionString;
+            string? connectionString = options?.Value?.ContainerConnectionString;
             string? containerName = options?.Value?.ContainerName;
 
             if (string.IsNullOrEmpty(connectionString))
