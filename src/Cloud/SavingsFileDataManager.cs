@@ -93,14 +93,9 @@ namespace Savey
         {
             Wish newWish;
             bool success;
-            int count = 0;
             do
             {
                 newWish = new Wish();
-                if (count++ == 0)
-                {
-                    newWish.Id = "UttMcT";
-                }
 
                 try
                 {
