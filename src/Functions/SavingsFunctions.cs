@@ -27,6 +27,15 @@ namespace Savey
             return new OkObjectResult(savingsFile);
         }
 
+        [FunctionName("GetColors")]
+        public async Task<IActionResult> GetColorsAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Colors")] HttpRequest req,
+            ILogger log)
+        {
+            var colors = await dataManager.GetColorsAsync();
+            return new OkObjectResult(colors);
+        }
+
         [FunctionName("CreateWish")]
         public async Task<IActionResult> CreateWishAsync(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish")] HttpRequest req,

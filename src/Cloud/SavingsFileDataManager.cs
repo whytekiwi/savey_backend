@@ -1,5 +1,5 @@
+using System.Collections.Generic;
 using System.IO;
-using System.Net;
 using System.Threading.Tasks;
 using Azure;
 using Azure.Storage.Blobs;
@@ -14,6 +14,7 @@ namespace Savey
         Task<Wish?> GetSavedWishAsync(string id);
         Task SaveWishAsync(Wish wish, bool overwrite = true);
         Task<Wish> CreateNewWishAsync();
+        Task<Dictionary<string, int>> GetColorsAsync();
     }
 
     /// <summary>
@@ -23,6 +24,8 @@ namespace Savey
     {
         // The storage container to save data in
         private readonly BlobContainerClient cloudContainer;
+
+        private const string colorMetadataKey = "Color";
 
         public SavingsFileDataManager(IBlobContainerClientProvider containerClientProvider)
         {
@@ -62,7 +65,7 @@ namespace Savey
                 return null;
             }
         }
-        
+
         public async Task SaveWishAsync(Wish wish, bool overwrite = true)
         {
             JToken json = JObject.FromObject(wish);
@@ -76,6 +79,14 @@ namespace Savey
                     ContentType = "application/json"
                 }
             };
+
+            if (!string.IsNullOrEmpty(wish.Color))
+            {
+                uploadOptions.Metadata = new Dictionary<string, string>
+                {
+                    {colorMetadataKey, wish.Color}
+                };
+            }
 
             if (!overwrite)
             {
@@ -116,6 +127,31 @@ namespace Savey
             } while (!success);
 
             return newWish;
+        }
+
+        public async Task<Dictionary<string, int>> GetColorsAsync()
+        {
+            Dictionary<string, int> colorLookup = new Dictionary<string, int>();
+            var resultsSegment = cloudContainer.GetBlobsAsync()
+                .AsPages();
+
+            await foreach (var page in resultsSegment)
+            {
+                foreach (var blob in page.Values)
+                {
+                    if (blob.Metadata.TryGetValue(colorMetadataKey, out string? color) && !string.IsNullOrEmpty(color))
+                    {
+                        if (!colorLookup.TryGetValue(color, out int count))
+                        {
+                            count = 0;
+                        }
+
+                        colorLookup[color] = count + 1;
+                    }
+                }
+            }
+
+            return colorLookup;
         }
 
         private static string GetFileName(string id)
