@@ -9,9 +9,6 @@ using Newtonsoft.Json;
 
 namespace Savey
 {
-    /// <summary>
-    /// Functions related to user data
-    /// </summary>
     public class SavingsFunctions
     {
         private readonly ISavingsFileDataManager dataManager;
@@ -21,44 +18,35 @@ namespace Savey
             this.dataManager = dataManager;
         }
 
-        /// <summary>
-        /// Get the users data from storage
-        /// </summary>
-        [FunctionName("GetSavingsFile")]
-        public async Task<IActionResult> RunGet(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "SavingsFile")] HttpRequest req,
-            ILogger log)
+        [FunctionName("GetWish")]
+        public async Task<IActionResult> GetWishAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish/{id}")] HttpRequest req,
+            ILogger log, string id)
         {
-            string id = Utilities.GetUserIdFromRequest(req);
-            if (string.IsNullOrEmpty(id))
-            {
-                return new UnauthorizedResult();
-            }
-
-            var savingsFile = await dataManager.GetSavedValueAsync(id);
-
+            var savingsFile = await dataManager.GetSavedWishAsync(id);
             return new OkObjectResult(savingsFile);
         }
 
-        /// <summary>
-        /// Save the users data to storage
-        /// </summary>
-        [FunctionName("PostSavingsFile")]
-        public async Task<IActionResult> RunPost(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "SavingsFile")] HttpRequest req,
+        [FunctionName("CreateWish")]
+        public async Task<IActionResult> CreateWishAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish")] HttpRequest req,
             ILogger log)
         {
-            string id = Utilities.GetUserIdFromRequest(req);
-            if (string.IsNullOrEmpty(id))
-            {
-                return new UnauthorizedResult();
-            }
+            var savingsFile = await dataManager.CreateNewWishAsync();
+            return new OkObjectResult(savingsFile);
+        }
 
-            JToken json;
+        [FunctionName("SaveWish")]
+        public async Task<IActionResult> SaveWishAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "Wish")] HttpRequest req,
+            ILogger log)
+        {
+            Wish wish;
 
             try
             {
-                json = await Utilities.ReadJsonFromStream(req.Body);
+                JToken json = await Utilities.ReadJsonFromStreamAsync(req.Body);
+                wish = json.ToObject<Wish>();
             }
             catch (JsonReaderException ex)
             {
@@ -69,8 +57,7 @@ namespace Savey
                 return new BadRequestObjectResult(errorMessage);
             }
 
-            await dataManager.SaveValueAsync(json, id);
-
+            await dataManager.SaveWishAsync(wish);
             return new NoContentResult();
         }
     }

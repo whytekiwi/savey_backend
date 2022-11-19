@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net;
 using System.Threading.Tasks;
@@ -12,8 +11,9 @@ namespace Savey
 {
     public interface ISavingsFileDataManager
     {
-        Task<JToken?> GetSavedValueAsync(string id);
-        Task SaveValueAsync(JToken value, string id);
+        Task<Wish?> GetSavedWishAsync(string id);
+        Task SaveWishAsync(Wish wish, bool overwrite = true);
+        Task<Wish> CreateNewWishAsync();
     }
 
     /// <summary>
@@ -24,22 +24,12 @@ namespace Savey
         // The storage container to save data in
         private readonly BlobContainerClient cloudContainer;
 
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="containerClientProvider">Provides instances of <see cref="BlobContainerClient"/></param>
         public SavingsFileDataManager(IBlobContainerClientProvider containerClientProvider)
         {
             this.cloudContainer = containerClientProvider.CloudContainer;
         }
 
-        /// <summary>
-        /// Get the value saved in Azure blob storage
-        /// </summary>
-        /// <param name="id">The id for the user fetching data</param>
-        /// <returns>The persisted data for the user</returns>
-        /// <remarks>Can return null if the user has not uploaded any data yet</remarks>
-        public async Task<JToken?> GetSavedValueAsync(string id)
+        public async Task<Wish?> GetSavedWishAsync(string id)
         {
             var blob = cloudContainer.GetBlobClient(GetFileName(id));
 
@@ -51,13 +41,13 @@ namespace Savey
                 await blobStream.FlushAsync();
                 blobStream.Seek(0, SeekOrigin.Begin);
 
-                return await Utilities.ReadJsonFromStream(blobStream);
+                var json = await Utilities.ReadJsonFromStreamAsync(blobStream);
+                return json.ToObject<Wish>();
             }
             catch (RequestFailedException ex)
             {
-                if (ex.Status == (int)HttpStatusCode.NotFound)
+                if (ex.ErrorCode == BlobErrorCode.BlobNotFound)
                 {
-                    // The blob doesn't exist, which is perfectly valid
                     return null;
                 }
 
@@ -71,18 +61,13 @@ namespace Savey
 
                 return null;
             }
-
         }
-
-        /// <summary>
-        /// Save user data to Azure blob storage
-        /// </summary>
-        /// <param name="value">The user data to save</param>
-        /// <param name="id">The id for the user</param>
-        public async Task SaveValueAsync(JToken value, string id)
+        
+        public async Task SaveWishAsync(Wish wish, bool overwrite = true)
         {
+            JToken json = JObject.FromObject(wish);
             using MemoryStream stream = new MemoryStream();
-            await Utilities.WriteJsonToStream(value, stream);
+            await Utilities.WriteJsonToStreamAsync(json, stream);
 
             BlobUploadOptions uploadOptions = new BlobUploadOptions
             {
@@ -92,11 +77,53 @@ namespace Savey
                 }
             };
 
-            var blob = cloudContainer.GetBlobClient(GetFileName(id));
+            if (!overwrite)
+            {
+                uploadOptions.Conditions = new BlobRequestConditions
+                {
+                    IfNoneMatch = ETag.All
+                };
+            }
+
+            var blob = cloudContainer.GetBlobClient(GetFileName(wish.Id));
             await blob.UploadAsync(stream, uploadOptions);
         }
 
+        public async Task<Wish> CreateNewWishAsync()
+        {
+            Wish newWish;
+            bool success;
+            int count = 0;
+            do
+            {
+                newWish = new Wish();
+                if (count++ == 0)
+                {
+                    newWish.Id = "UttMcT";
+                }
+
+                try
+                {
+                    await SaveWishAsync(newWish, false);
+                    success = true;
+                }
+                catch (RequestFailedException ex)
+                {
+                    if (ex.ErrorCode == BlobErrorCode.BlobAlreadyExists)
+                    {
+                        // This blob already exists, we need to generate a new id
+                        success = false;
+                        continue;
+                    }
+
+                    throw;
+                }
+            } while (!success);
+
+            return newWish;
+        }
+
         private static string GetFileName(string id)
-            => Path.ChangeExtension(id, "json");
+            => Path.Combine(id, Path.ChangeExtension(id, "json"));
     }
 }
