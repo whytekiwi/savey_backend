@@ -7,6 +7,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -21,7 +22,7 @@ namespace Savey
         Task<string> UploadFileAsync(IFormFile file, string id);
         Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30);
         Task DeleteFileAsync(string path);
-        Task<BlobDownloadInfo> DownloadFileAsync(string path);
+        Task<FileStreamResult> DownloadFileAsync(string path);
     }
 
     /// <summary>
@@ -185,10 +186,14 @@ namespace Savey
             return leaseClient;
         }
 
-        public async Task<BlobDownloadInfo> DownloadFileAsync(string path)
+        public async Task<FileStreamResult> DownloadFileAsync(string path)
         {
-            var fileBlob = cloudContainer.GetBlobClient(path);
-            return await fileBlob.DownloadAsync();
+            var blob = cloudContainer.GetBlobClient(path);
+
+            var props = await blob.GetPropertiesAsync();
+            var blobStream = await blob.OpenReadAsync();
+
+            return new FileStreamResult(blobStream, props.Value.ContentType);
         }
 
         public async Task DeleteFileAsync(string path)

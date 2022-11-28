@@ -10,6 +10,7 @@ using Azure.Storage.Blobs.Specialized;
 using System;
 using Azure;
 using Azure.Storage.Blobs.Models;
+using System.IO;
 
 namespace Savey
 {
@@ -88,8 +89,8 @@ namespace Savey
 
             if (!string.IsNullOrEmpty(wish.PhotoUrl))
             {
-                var blob = await dataManager.DownloadFileAsync(wish.PhotoUrl);
-                return new BlobResult(blob);
+                using var stream = new MemoryStream();
+                return await dataManager.DownloadFileAsync(wish.PhotoUrl);
             }
             return new NoContentResult();
         }
