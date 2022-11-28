@@ -1,9 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
+using Microsoft.AspNetCore.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -11,10 +14,13 @@ namespace Savey
 {
     public interface ISavingsFileDataManager
     {
-        Task<Wish?> GetSavedWishAsync(string id);
-        Task SaveWishAsync(Wish wish, bool overwrite = true);
+        Task<Wish?> GetSavedWishAsync(string id, string? leaseId = null);
+        Task SaveWishAsync(Wish wish, bool overwrite = true, string? leaseId = null);
         Task<Wish> CreateNewWishAsync();
         Task<Dictionary<string, int>> GetColorsAsync();
+        Task<string> UploadFileAsync(IFormFile file, string id);
+        Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30);
+
     }
 
     /// <summary>
@@ -32,14 +38,23 @@ namespace Savey
             this.cloudContainer = containerClientProvider.CloudContainer;
         }
 
-        public async Task<Wish?> GetSavedWishAsync(string id)
+        public async Task<Wish?> GetSavedWishAsync(string id, string? leaseId)
         {
             var blob = cloudContainer.GetBlobClient(GetFileName(id));
+
+            var downloadToOptions = new BlobDownloadToOptions();
+            if (!string.IsNullOrEmpty(leaseId))
+            {
+                downloadToOptions.Conditions = new BlobRequestConditions
+                {
+                    LeaseId = leaseId
+                };
+            }
 
             try
             {
                 using var blobStream = new MemoryStream();
-                await blob.DownloadToAsync(blobStream);
+                await blob.DownloadToAsync(blobStream, downloadToOptions);
 
                 await blobStream.FlushAsync();
                 blobStream.Seek(0, SeekOrigin.Begin);
@@ -66,7 +81,7 @@ namespace Savey
             }
         }
 
-        public async Task SaveWishAsync(Wish wish, bool overwrite = true)
+        public async Task SaveWishAsync(Wish wish, bool overwrite = true, string? leaseId = null)
         {
             JToken json = JObject.FromObject(wish);
             using MemoryStream stream = new MemoryStream();
@@ -79,6 +94,13 @@ namespace Savey
                     ContentType = "application/json"
                 }
             };
+            if (!string.IsNullOrEmpty(leaseId))
+            {
+                uploadOptions.Conditions = new BlobRequestConditions
+                {
+                    LeaseId = leaseId
+                };
+            }
 
             if (!string.IsNullOrEmpty(wish.Color))
             {
@@ -152,6 +174,34 @@ namespace Savey
             }
 
             return colorLookup;
+        }
+
+        public async Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30)
+        {
+            var wishBlob = cloudContainer.GetBlobClient(GetFileName(id));
+            var leaseClient = wishBlob.GetBlobLeaseClient();
+            await leaseClient.AcquireAsync(TimeSpan.FromSeconds(30));
+            return leaseClient;
+        }
+
+
+        public async Task<string> UploadFileAsync(IFormFile file, string id)
+        {
+            // Upload file
+            string filename = Path.Combine(id, file.FileName);
+            var photoBlob = cloudContainer.GetBlobClient(filename);
+
+            BlobUploadOptions uploadOptions = new BlobUploadOptions();
+            if (file.Headers.ContainsKey("content-type"))
+            {
+                uploadOptions.HttpHeaders = new BlobHttpHeaders
+                {
+                    ContentType = file.Headers["content-type"]
+                };
+            };
+
+            await photoBlob.UploadAsync(file.OpenReadStream(), uploadOptions);
+            return photoBlob.Uri.ToString();
         }
 
         private static string GetFileName(string id)

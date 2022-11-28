@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Azure.Storage.Blobs.Specialized;
+using System;
+using Azure;
+using Azure.Storage.Blobs.Models;
 
 namespace Savey
 {
@@ -68,6 +72,71 @@ namespace Savey
 
             await dataManager.SaveWishAsync(wish);
             return new NoContentResult();
+        }
+
+        [FunctionName("UploadPhoto")]
+        public async Task<IActionResult> UploadPhotoAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "Wish/{id}/Photo")] HttpRequest req,
+            ILogger log,
+            string id)
+        {
+            IFormFile file;
+            try
+            {
+                var formDate = await req.ReadFormAsync();
+                file = req.Form.Files["photo"];
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Could not upload file to blob storage");
+                return new BadRequestResult();
+            }
+
+            if (file == null)
+            {
+                return new BadRequestObjectResult("Could not read file");
+            }
+
+            BlobLeaseClient lease;
+            try
+            {
+                lease = await dataManager.GetLeaseAsync(id);
+            }
+            catch (RequestFailedException ex)
+            {
+                if (ex.ErrorCode == BlobErrorCode.BlobNotFound)
+                {
+                    return new BadRequestObjectResult("Wish does not exist");
+                }
+                if (ex.ErrorCode == BlobErrorCode.LeaseAlreadyPresent)
+                {
+                    return new BadRequestObjectResult("Already uploading photo");
+                }
+                throw;
+            }
+
+            try
+            {
+                var url = await dataManager.UploadFileAsync(file, id);
+                var wish = await dataManager.GetSavedWishAsync(id, lease.LeaseId);
+                if (wish == null)
+                {
+                    return new NoContentResult();
+                }
+                wish.PhotoUrl = url;
+                await dataManager.SaveWishAsync(wish, leaseId: lease.LeaseId);
+
+                return new OkObjectResult(wish);
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Could not upload file to blob storage");
+                return new BadRequestResult();
+            }
+            finally
+            {
+                await lease.ReleaseAsync();
+            }
         }
     }
 }
