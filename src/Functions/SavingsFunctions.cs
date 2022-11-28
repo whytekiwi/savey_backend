@@ -74,6 +74,26 @@ namespace Savey
             return new NoContentResult();
         }
 
+        [FunctionName("GetPhoto")]
+        public async Task<IActionResult> GetPhotoAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish/{id}/Photo")] HttpRequest req,
+            ILogger log,
+            string id)
+        {
+            var wish = await dataManager.GetSavedWishAsync(id);
+            if (wish == null)
+            {
+                return new NoContentResult();
+            }
+
+            if (!string.IsNullOrEmpty(wish.PhotoUrl))
+            {
+                var blob = await dataManager.DownloadFileAsync(wish.PhotoUrl);
+                return new BlobResult(blob);
+            }
+            return new NoContentResult();
+        }
+
         [FunctionName("UploadPhoto")]
         public async Task<IActionResult> UploadPhotoAsync(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "Wish/{id}/Photo")] HttpRequest req,
@@ -88,7 +108,7 @@ namespace Savey
             }
             catch (Exception ex)
             {
-                log.LogError(ex, "Could not upload file to blob storage");
+                log.LogError(ex, "Could not read file from incoming request");
                 return new BadRequestResult();
             }
 
@@ -117,11 +137,16 @@ namespace Savey
 
             try
             {
-                var url = await dataManager.UploadFileAsync(file, id);
                 var wish = await dataManager.GetSavedWishAsync(id, lease.LeaseId);
                 if (wish == null)
                 {
                     return new NoContentResult();
+                }
+
+                var url = await dataManager.UploadFileAsync(file, id);
+                if (!string.IsNullOrEmpty(wish.PhotoUrl))
+                {
+                    await dataManager.DeleteFileAsync(wish.PhotoUrl);
                 }
                 wish.PhotoUrl = url;
                 await dataManager.SaveWishAsync(wish, leaseId: lease.LeaseId);

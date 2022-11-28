@@ -20,7 +20,8 @@ namespace Savey
         Task<Dictionary<string, int>> GetColorsAsync();
         Task<string> UploadFileAsync(IFormFile file, string id);
         Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30);
-
+        Task DeleteFileAsync(string path);
+        Task<BlobDownloadInfo> DownloadFileAsync(string path);
     }
 
     /// <summary>
@@ -184,6 +185,28 @@ namespace Savey
             return leaseClient;
         }
 
+        public async Task<BlobDownloadInfo> DownloadFileAsync(string path)
+        {
+            var fileBlob = cloudContainer.GetBlobClient(path);
+            return await fileBlob.DownloadAsync();
+        }
+
+        public async Task DeleteFileAsync(string path)
+        {
+            try
+            {
+                var fileBlob = cloudContainer.GetBlobClient(path);
+                await fileBlob.DeleteAsync();
+            }
+            catch (RequestFailedException ex)
+            {
+                if (ex.ErrorCode == BlobErrorCode.BlobNotFound)
+                {
+                    return;
+                }
+                throw;
+            }
+        }
 
         public async Task<string> UploadFileAsync(IFormFile file, string id)
         {
@@ -201,7 +224,7 @@ namespace Savey
             };
 
             await photoBlob.UploadAsync(file.OpenReadStream(), uploadOptions);
-            return photoBlob.Uri.ToString();
+            return photoBlob.Name;
         }
 
         private static string GetFileName(string id)
