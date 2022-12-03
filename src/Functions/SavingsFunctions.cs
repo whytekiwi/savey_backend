@@ -46,8 +46,8 @@ namespace Savey
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish")] HttpRequest req,
             ILogger log)
         {
-            var savingsFile = await dataManager.CreateNewWishAsync();
-            return new OkObjectResult(savingsFile);
+            var wish = await dataManager.CreateNewWishAsync();
+            return new OkObjectResult(wish);
         }
 
         [FunctionName("SaveWish")]
@@ -75,24 +75,15 @@ namespace Savey
             return new NoContentResult();
         }
 
-        [FunctionName("GetPhoto")]
-        public async Task<IActionResult> GetPhotoAsync(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish/{id}/Photo")] HttpRequest req,
+        [FunctionName("GetFile")]
+        public async Task<IActionResult> GetFileAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "Wish/{id}/Download/{filename}")] HttpRequest req,
             ILogger log,
-            string id)
+            string id,
+            string filename)
         {
-            var wish = await dataManager.GetSavedWishAsync(id);
-            if (wish == null)
-            {
-                return new NoContentResult();
-            }
-
-            if (!string.IsNullOrEmpty(wish.PhotoUrl))
-            {
-                using var stream = new MemoryStream();
-                return await dataManager.DownloadFileAsync(wish.PhotoUrl);
-            }
-            return new NoContentResult();
+            req.HttpContext.Response.Headers.Add("cache-control", "no-cache");
+            return await dataManager.DownloadFileAsync(id, filename);
         }
 
         [FunctionName("UploadPhoto")]
@@ -113,6 +104,38 @@ namespace Savey
                 return new BadRequestResult();
             }
 
+            return await SaveFileWithLeaseAsync(file, id, log, (wish) => wish.PhotoFileName, (wish, blobName) => wish.PhotoFileName = blobName);
+        }
+
+        [FunctionName("UploadVideo")]
+        public async Task<IActionResult> UploadVideoAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "Wish/{id}/Video")] HttpRequest req,
+            ILogger log,
+            string id)
+        {
+            IFormFile file;
+            try
+            {
+                var formDate = await req.ReadFormAsync();
+                file = req.Form.Files["video"];
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Could not read file from incoming request");
+                return new BadRequestResult();
+            }
+
+            return await SaveFileWithLeaseAsync(file, id, log, (wish) => wish.VideoFileName, (wish, blobName) => wish.VideoFileName = blobName);
+        }
+
+        private async Task<IActionResult> SaveFileWithLeaseAsync(
+            IFormFile file,
+            string id,
+            ILogger log,
+            Func<Wish, string?> filenameSelector,
+            Action<Wish, string> wishUpdateDelegate)
+        {
+
             if (file == null)
             {
                 return new BadRequestObjectResult("Could not read file");
@@ -131,7 +154,7 @@ namespace Savey
                 }
                 if (ex.ErrorCode == BlobErrorCode.LeaseAlreadyPresent)
                 {
-                    return new BadRequestObjectResult("Already uploading photo");
+                    return new BadRequestObjectResult("Already uploading file");
                 }
                 throw;
             }
@@ -144,12 +167,13 @@ namespace Savey
                     return new NoContentResult();
                 }
 
-                var url = await dataManager.UploadFileAsync(file, id);
-                if (!string.IsNullOrEmpty(wish.PhotoUrl))
+                var blobName = await dataManager.UploadFileAsync(file, id);
+                var fileName = filenameSelector(wish);
+                if (!string.IsNullOrEmpty(fileName))
                 {
-                    await dataManager.DeleteFileAsync(wish.PhotoUrl);
+                    await dataManager.DeleteFileAsync(id, fileName);
                 }
-                wish.PhotoUrl = url;
+                wishUpdateDelegate(wish, blobName);
                 await dataManager.SaveWishAsync(wish, leaseId: lease.LeaseId);
 
                 return new OkObjectResult(wish);

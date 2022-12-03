@@ -6,7 +6,7 @@ namespace Savey
         public string? Name { get; set; }
         public string[]? Tags { get; set; }
         public string? Color { get; set; }
-        public string? PhotoUrl { get; set; }
-        public string? VideoUrl { get; set; }
+        public string? PhotoFileName { get; set; }
+        public string? VideoFileName { get; set; }
     }
 }

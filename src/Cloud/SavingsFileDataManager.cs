@@ -21,8 +21,8 @@ namespace Savey
         Task<Dictionary<string, int>> GetColorsAsync();
         Task<string> UploadFileAsync(IFormFile file, string id);
         Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30);
-        Task DeleteFileAsync(string path);
-        Task<FileStreamResult> DownloadFileAsync(string path);
+        Task DeleteFileAsync(string id, string fileName);
+        Task<FileResult> DownloadFileAsync(string id, string fileName);
     }
 
     /// <summary>
@@ -186,9 +186,9 @@ namespace Savey
             return leaseClient;
         }
 
-        public async Task<FileStreamResult> DownloadFileAsync(string path)
+        public async Task<FileResult> DownloadFileAsync(string id, string fileName)
         {
-            var blob = cloudContainer.GetBlobClient(path);
+            var blob = cloudContainer.GetBlobClient(Path.Combine(id, fileName));
 
             var props = await blob.GetPropertiesAsync();
             var blobStream = await blob.OpenReadAsync();
@@ -196,11 +196,11 @@ namespace Savey
             return new FileStreamResult(blobStream, props.Value.ContentType);
         }
 
-        public async Task DeleteFileAsync(string path)
+        public async Task DeleteFileAsync(string id, string fileName)
         {
             try
             {
-                var fileBlob = cloudContainer.GetBlobClient(path);
+                var fileBlob = cloudContainer.GetBlobClient(Path.Combine(id, fileName));
                 await fileBlob.DeleteAsync();
             }
             catch (RequestFailedException ex)
@@ -217,19 +217,19 @@ namespace Savey
         {
             // Upload file
             string filename = Path.Combine(id, file.FileName);
-            var photoBlob = cloudContainer.GetBlobClient(filename);
+            var blob = cloudContainer.GetBlobClient(filename);
 
             BlobUploadOptions uploadOptions = new BlobUploadOptions();
-            if (file.Headers.ContainsKey("content-type"))
+            if (file.Headers.TryGetValue("content-type", out var contentType))
             {
                 uploadOptions.HttpHeaders = new BlobHttpHeaders
                 {
-                    ContentType = file.Headers["content-type"]
+                    ContentType = contentType
                 };
-            };
+            }
 
-            await photoBlob.UploadAsync(file.OpenReadStream(), uploadOptions);
-            return photoBlob.Name;
+            await blob.UploadAsync(file.OpenReadStream(), uploadOptions);
+            return Path.GetFileName(blob.Name);
         }
 
         private static string GetFileName(string id)
