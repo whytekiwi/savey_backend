@@ -82,7 +82,6 @@ namespace Savey
             string id,
             string filename)
         {
-            req.HttpContext.Response.Headers.Add("cache-control", "no-cache");
             return await dataManager.DownloadFileAsync(id, filename);
         }
 
