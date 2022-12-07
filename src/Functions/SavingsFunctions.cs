@@ -29,6 +29,10 @@ namespace Savey
             ILogger log, string id)
         {
             var savingsFile = await dataManager.GetSavedWishAsync(id);
+            if (savingsFile == null)
+            {
+                savingsFile = await dataManager.CreateNewWishAsync(id);
+            }
             return new OkObjectResult(savingsFile);
         }
 

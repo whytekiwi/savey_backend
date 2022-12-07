@@ -17,7 +17,7 @@ namespace Savey
     {
         Task<Wish?> GetSavedWishAsync(string id, string? leaseId = null);
         Task SaveWishAsync(Wish wish, bool overwrite = true, string? leaseId = null);
-        Task<Wish> CreateNewWishAsync();
+        Task<Wish> CreateNewWishAsync(string? id = null);
         Task<Dictionary<string, int>> GetColorsAsync();
         Task<string> UploadFileAsync(IFormFile file, string id);
         Task<BlobLeaseClient> GetLeaseAsync(string id, int holdTime = 30);
@@ -124,13 +124,17 @@ namespace Savey
             await blob.UploadAsync(stream, uploadOptions);
         }
 
-        public async Task<Wish> CreateNewWishAsync()
+        public async Task<Wish> CreateNewWishAsync(string? id = null)
         {
             Wish newWish;
             bool success;
             do
             {
                 newWish = new Wish();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    newWish.Id = id;
+                }
 
                 try
                 {
@@ -148,7 +152,7 @@ namespace Savey
 
                     throw;
                 }
-            } while (!success);
+            } while (!success && string.IsNullOrEmpty(id));
 
             return newWish;
         }
